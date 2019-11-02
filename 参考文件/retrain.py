@@ -116,8 +116,6 @@ from tensorflow.python.framework import tensor_shape
 from tensorflow.python.platform import gfile
 from tensorflow.python.util import compat
 
-from keras import backend as K
-
 FLAGS = None
 
 # These are all parameters that are tied to the particular model architecture
@@ -1027,7 +1025,6 @@ def main(_):
                                               FLAGS.random_brightness)
 
     with tf.Session(graph=graph) as sess:
-        K.set_session(sess)
         # Set up the image decoding sub-graph.
         jpeg_data_tensor, decoded_image_tensor = add_jpeg_decoding(
             model_info['input_width'], model_info['input_height'],

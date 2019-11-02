@@ -1,8 +1,8 @@
 # coding:utf-8
 
 import tensorflow as tf
-from constant import SUMMARIES_DIR, IMAGE_DIR, TESTING_PERCENTAGE, VALIDATION_PERCENTAGE
-from core.model_process import create_model_graph, add_final_training_ops
+from constant import SUMMARIES_DIR, IMAGE_DIR, TESTING_PERCENTAGE, VALIDATION_PERCENTAGE, FINAL_TENSOR_NAME
+from core.model_process import create_model_graph, add_final_training_ops, save_graph_to_file
 from core.image_process import create_image_lists, add_input_distortions
 from config import MODEL_INFO
 from utils import download_and_extract
@@ -47,8 +47,8 @@ def init():
         IMAGE_PROCESS_VALUE['random_crop'],
         IMAGE_PROCESS_VALUE['random_scale'],
         IMAGE_PROCESS_VALUE['random_brightness'],
-        MODEL_INFO['resize_width'],
-        MODEL_INFO['resize_height'], MODEL_INFO['depths'],
+        MODEL_INFO['input_width'],
+        MODEL_INFO['input_height'], MODEL_INFO['input_depth'],
         MODEL_INFO['input_mean'],  MODEL_INFO['input_std'])
 
     # download_and_extract(MODEL_INFO['data_url'])
@@ -56,9 +56,23 @@ def init():
     # 加载 inception_v3模型
     graph, bottleneck_tensor, jpeg_data_tensor = create_model_graph()
 
-    # 添加新的模型层
-    # Add the new layer that we'll be training.
-    (train_step, cross_entropy, bottleneck_input, ground_truth_input,
-     final_tensor) = add_final_training_ops(
-        len(image_lists.keys()), "final_result",
-        bottleneck_tensor, MODEL_INFO['bottleneck_tensor_size'])
+    with tf.Session(graph=graph) as sess:
+        # 添加新的模型层
+        # Add the new layer that we'll be training.
+        (train_step, cross_entropy, bottleneck_input, ground_truth_input,
+         final_tensor) = add_final_training_ops(
+            len(image_lists.keys()),
+            FINAL_TENSOR_NAME,
+            bottleneck_tensor,
+            MODEL_INFO['bottleneck_tensor_size'])
+
+        init = tf.global_variables_initializer()
+        sess.run(init)
+
+        tf.keras.backend.set_session(sess)
+        # save_graph_to_file(sess, graph, "./output/output_graph.pb")
+        saver = tf.train.Saver()
+        saver.save(tf.keras.backend.get_session(), "./output/saved_model")
+
+        # new_model = tf.keras.experimental.load_from_saved_model("./output")
+        tf.keras.experimental.export_saved_model(tf.keras.backend.get_session(), "./SavedModel")

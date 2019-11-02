@@ -1,14 +1,16 @@
 # coding:utf-8
 import os
 import tensorflow as tf
-from constant import LEARNING_RATE, MODEL_DIR
+from constant import LEARNING_RATE, MODEL_DIR, FINAL_TENSOR_NAME
 from config import MODEL_INFO
 from tensorflow.python.platform import gfile
+from tensorflow.python.framework import graph_util
 
 
 def create_model_graph():
     with tf.Graph().as_default() as graph:
         model_path = os.path.join(MODEL_DIR, MODEL_INFO['model_file_name'])
+        print(model_path, "asssss")
         with gfile.FastGFile(model_path, 'rb') as f:
             graph_def = tf.GraphDef()
             graph_def.ParseFromString(f.read())
@@ -110,3 +112,11 @@ def add_evaluation_step(result_tensor, ground_truth_tensor):
             evaluation_step = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     tf.summary.scalar('accuracy', evaluation_step)
     return evaluation_step, prediction
+
+
+def save_graph_to_file(sess, graph, graph_file_name):
+    output_graph_def = graph_util.convert_variables_to_constants(
+        sess, graph.as_graph_def(), [FINAL_TENSOR_NAME])
+    with gfile.FastGFile(graph_file_name, 'wb') as f:
+        f.write(output_graph_def.SerializeToString())
+    return
