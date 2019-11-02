@@ -2,10 +2,13 @@
 
 import tensorflow as tf
 from constant import SUMMARIES_DIR, IMAGE_DIR, TESTING_PERCENTAGE, VALIDATION_PERCENTAGE, FINAL_TENSOR_NAME
-from core.model_process import create_model_graph, add_final_training_ops, save_graph_to_file
+from core.model_process import create_model, add_new_last_layer, setup_to_transfer_learning
 from core.image_process import create_image_lists, add_input_distortions
 from config import MODEL_INFO
 from utils import download_and_extract
+
+from tensorflow.python.keras.api._v1.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.python.keras.api._v1.keras.applications.inception_v3 import preprocess_input
 
 # 图片扭曲参数，即是几何变换
 IMAGE_PROCESS_VALUE = {
@@ -14,6 +17,26 @@ IMAGE_PROCESS_VALUE = {
     'random_scale': 0,
     'random_brightness': 0
 }
+
+train_datagen = ImageDataGenerator(
+    preprocessing_function=preprocess_input,  # ((x/255)-0.5)*2  归一化到±1之间
+    rotation_range=30,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+)
+
+val_datagen = ImageDataGenerator(
+    preprocessing_function=preprocess_input,
+    rotation_range=30,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+)
 
 
 def prepare_file_system():
@@ -51,28 +74,24 @@ def init():
         MODEL_INFO['input_height'], MODEL_INFO['input_depth'],
         MODEL_INFO['input_mean'],  MODEL_INFO['input_std'])
 
-    # download_and_extract(MODEL_INFO['data_url'])
+    base_model, data_input = create_model()
+    model = add_new_last_layer(base_model, class_count)
 
-    # 加载 inception_v3模型
-    graph, bottleneck_tensor, jpeg_data_tensor = create_model_graph()
+    setup_to_transfer_learning(model, base_model)
 
-    with tf.Session(graph=graph) as sess:
-        # 添加新的模型层
-        # Add the new layer that we'll be training.
-        (train_step, cross_entropy, bottleneck_input, ground_truth_input,
-         final_tensor) = add_final_training_ops(
-            len(image_lists.keys()),
-            FINAL_TENSOR_NAME,
-            bottleneck_tensor,
-            MODEL_INFO['bottleneck_tensor_size'])
+    train_generator = train_datagen.flow_from_directory(directory='./images',
+                                                        target_size=(299, 299),  # Inception V3规定大小
+                                                        batch_size=4)
 
-        init = tf.global_variables_initializer()
-        sess.run(init)
+    val_generator = val_datagen.flow_from_directory(directory='./validation-images',
+                                                    target_size=(299, 299),
+                                                    batch_size=4)
+    model.fit_generator(generator=train_generator,
+                        steps_per_epoch=800,  # 800
+                        epochs=2,  # 2
+                        validation_data=val_generator,
+                        validation_steps=12,  # 12
+                        class_weight='auto'
+                        )
 
-        tf.keras.backend.set_session(sess)
-        # save_graph_to_file(sess, graph, "./output/output_graph.pb")
-        saver = tf.train.Saver()
-        saver.save(tf.keras.backend.get_session(), "./output/saved_model")
-
-        # new_model = tf.keras.experimental.load_from_saved_model("./output")
-        tf.keras.experimental.export_saved_model(tf.keras.backend.get_session(), "./SavedModel")
+    tf.keras.experimental.export_saved_model(model, "./SavedModel")

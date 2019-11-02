@@ -5,6 +5,40 @@ from constant import LEARNING_RATE, MODEL_DIR, FINAL_TENSOR_NAME
 from config import MODEL_INFO
 from tensorflow.python.platform import gfile
 from tensorflow.python.framework import graph_util
+from tensorflow.python.keras.api._v1.keras.applications.inception_v3 import InceptionV3
+from tensorflow.python.keras.api._v1.keras.layers import GlobalAveragePooling2D, Dense
+from tensorflow.python.keras.api._v1.keras.models import Model
+
+
+def create_model():
+    batch_size = 4  #
+    resize_height = 299  # 指定存储图片高度
+    resize_width = 299  # 指定存储图片宽度
+    depths = 3
+    data_shape = [batch_size, resize_height, resize_width, depths]
+
+    # 定义input_images为图片数据
+    input_images = tf.placeholder(
+        dtype=tf.float32,
+        shape=[None, resize_height, resize_width, depths],
+        name='input')
+    base_model = InceptionV3(weights='imagenet', include_top=False)
+    return base_model, data_shape
+
+
+def add_new_last_layer(base_model, nb_classes):
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+    x = Dense(1024, activation='relu')(x)
+    predictions = Dense(nb_classes, activation='softmax')(x)
+    model = Model(inputs=base_model.input, outputs=predictions)
+    return model
+
+
+def setup_to_transfer_learning(model, base_model):
+    for layer in base_model.layers:
+        layer.trainable = False
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
 
 def create_model_graph():
