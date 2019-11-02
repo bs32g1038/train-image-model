@@ -1,19 +1,14 @@
 # coding:utf-8
 # TensorFlow and tf.keras
 import tensorflow as tf
-from tensorflow import keras
-
-InceptionV3 = keras.applications.inception_v3.InceptionV3
-preprocess_input = keras.applications.inception_v3.preprocess_input
-
-# tf.keras.backend.set_session(tf.Session())
+from tensorflow.keras.applications.inception_v3 import InceptionV3
 
 print(tf.__version__)
 
 labels_nums = 5  # 类别个数
 batch_size = 4  #
-resize_height = 224  # 指定存储图片高度
-resize_width = 224  # 指定存储图片宽度
+resize_height = 299  # 指定存储图片高度
+resize_width = 299  # 指定存储图片宽度
 depths = 3
 data_shape = [batch_size, resize_height, resize_width, depths]
 
