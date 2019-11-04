@@ -6,6 +6,7 @@ from core.model_process import create_model, add_new_last_layer, setup_to_transf
 from core.image_process import create_image_lists, add_input_distortions
 from config import MODEL_INFO
 from utils import download_and_extract
+import os
 
 from tensorflow.python.keras.api._v1.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.python.keras.api._v1.keras.applications.inception_v3 import preprocess_input
@@ -44,6 +45,8 @@ def prepare_file_system():
     if tf.gfile.Exists(SUMMARIES_DIR):
         tf.gfile.DeleteRecursively(SUMMARIES_DIR)
     tf.gfile.MakeDirs(SUMMARIES_DIR)
+    if(os.path.exists("SavedModel")):   # 判断文件夹是否存在
+        os.removedirs("SavedModel")   # 删除文件夹
     return
 
 
@@ -80,12 +83,14 @@ def init():
     setup_to_transfer_learning(model, base_model)
 
     train_generator = train_datagen.flow_from_directory(directory='./images',
-                                                        target_size=(299, 299),  # Inception V3规定大小
+                                                        target_size=(224, 224),  # Inception V3规定大小
                                                         batch_size=4)
 
     val_generator = val_datagen.flow_from_directory(directory='./validation-images',
-                                                    target_size=(299, 299),
+                                                    target_size=(224, 224),
                                                     batch_size=4)
+    print(train_generator.class_indices, "===")
+
     model.fit_generator(generator=train_generator,
                         steps_per_epoch=800,  # 800
                         epochs=2,  # 2

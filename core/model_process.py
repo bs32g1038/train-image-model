@@ -5,7 +5,7 @@ from constant import LEARNING_RATE, MODEL_DIR, FINAL_TENSOR_NAME
 from config import MODEL_INFO
 from tensorflow.python.platform import gfile
 from tensorflow.python.framework import graph_util
-from tensorflow.python.keras.api._v1.keras.applications.inception_v3 import InceptionV3
+from tensorflow.python.keras.api._v1.keras.applications.resnet50 import ResNet50
 from tensorflow.python.keras.api._v1.keras.layers import GlobalAveragePooling2D, Dense
 from tensorflow.python.keras.api._v1.keras.models import Model
 
@@ -22,7 +22,7 @@ def create_model():
         dtype=tf.float32,
         shape=[None, resize_height, resize_width, depths],
         name='input')
-    base_model = InceptionV3(weights='imagenet', include_top=False)
+    base_model = ResNet50(weights='imagenet', include_top=False)
     return base_model, data_shape
 
 
@@ -44,7 +44,6 @@ def setup_to_transfer_learning(model, base_model):
 def create_model_graph():
     with tf.Graph().as_default() as graph:
         model_path = os.path.join(MODEL_DIR, MODEL_INFO['model_file_name'])
-        print(model_path, "asssss")
         with gfile.FastGFile(model_path, 'rb') as f:
             graph_def = tf.GraphDef()
             graph_def.ParseFromString(f.read())
