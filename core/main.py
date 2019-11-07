@@ -1,15 +1,54 @@
 # coding:utf-8
-
 import tensorflow as tf
-from constant import SUMMARIES_DIR, IMAGE_DIR, TESTING_PERCENTAGE, VALIDATION_PERCENTAGE, FINAL_TENSOR_NAME
-from core.model_process import create_model, add_new_last_layer, setup_to_transfer_learning
+from constant import SUMMARIES_DIR, IMAGE_DIR, TESTING_PERCENTAGE, VALIDATION_PERCENTAGE
+from core.model_process import create_model, add_new_last_layer, setup_to_transfer_learning, setup_to_fine_tune
 from core.image_process import create_image_lists, add_input_distortions
 from config import MODEL_INFO
-from utils import download_and_extract
 import os
 
-from tensorflow.python.keras.api._v1.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.python.keras.api._v1.keras.applications.inception_v3 import preprocess_input
+from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.python.keras.applications.resnet50 import preprocess_input
+
+import matplotlib.pyplot as plt
+
+
+class LossHistory(tf.keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = {'batch': [], 'epoch': []}
+        self.accuracy = {'batch': [], 'epoch': []}
+        self.val_loss = {'batch': [], 'epoch': []}
+        self.val_acc = {'batch': [], 'epoch': []}
+
+    def on_batch_end(self, batch, logs={}):
+        self.losses['batch'].append(logs.get('loss'))
+        self.accuracy['batch'].append(logs.get('acc'))
+        self.val_loss['batch'].append(logs.get('val_loss'))
+        self.val_acc['batch'].append(logs.get('val_acc'))
+
+    def on_epoch_end(self, batch, logs={}):
+        self.losses['epoch'].append(logs.get('loss'))
+        self.accuracy['epoch'].append(logs.get('acc'))
+        self.val_loss['epoch'].append(logs.get('val_loss'))
+        self.val_acc['epoch'].append(logs.get('val_acc'))
+
+    def loss_plot(self, loss_type):
+        iters = range(len(self.losses[loss_type]))
+        plt.figure()
+        # acc
+        plt.plot(iters, self.accuracy[loss_type], 'r', label='train acc')
+        # loss
+        plt.plot(iters, self.losses[loss_type], 'g', label='train loss')
+        if loss_type == 'epoch':
+            # val_acc
+            plt.plot(iters, self.val_acc[loss_type], 'b', label='val acc')
+            # val_loss
+            plt.plot(iters, self.val_loss[loss_type], 'k', label='val loss')
+        plt.grid(True)
+        plt.xlabel(loss_type)
+        plt.ylabel('acc-loss')
+        plt.legend(loc="upper right")
+        plt.show()
+
 
 # 图片扭曲参数，即是几何变换
 IMAGE_PROCESS_VALUE = {
@@ -78,25 +117,40 @@ def init():
         MODEL_INFO['input_mean'],  MODEL_INFO['input_std'])
 
     base_model, data_input = create_model()
-    model = add_new_last_layer(base_model, class_count)
+
+    train_generator = train_datagen.flow_from_directory(
+        directory='./images',
+        target_size=(224, 224),  # Inception V3规定大小
+        batch_size=4
+    )
+
+    val_generator = val_datagen.flow_from_directory(
+        directory='./validation-images',
+        target_size=(224, 224),
+        batch_size=4)
+
+    model = add_new_last_layer(base_model,  class_count)
 
     setup_to_transfer_learning(model, base_model)
 
-    train_generator = train_datagen.flow_from_directory(directory='./images',
-                                                        target_size=(224, 224),  # Inception V3规定大小
-                                                        batch_size=4)
-
-    val_generator = val_datagen.flow_from_directory(directory='./validation-images',
-                                                    target_size=(224, 224),
-                                                    batch_size=4)
-    print(train_generator.class_indices, "===")
-
     model.fit_generator(generator=train_generator,
-                        steps_per_epoch=800,  # 800
+                        steps_per_epoch=50,  # 800
                         epochs=2,  # 2
                         validation_data=val_generator,
                         validation_steps=12,  # 12
                         class_weight='auto'
                         )
+
+    setup_to_fine_tune(model, base_model)
+
+    model.fit_generator(generator=train_generator,
+                        steps_per_epoch=50,
+                        epochs=2,
+                        validation_data=val_generator,
+                        validation_steps=1,
+                        class_weight='auto'
+                        )
+
+    model.summary()
 
     tf.keras.experimental.export_saved_model(model, "./SavedModel")

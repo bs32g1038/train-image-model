@@ -7,31 +7,43 @@ from tensorflow.python.platform import gfile
 from tensorflow.python.framework import graph_util
 from tensorflow.python.keras.api._v1.keras.applications.resnet50 import ResNet50
 from tensorflow.python.keras.api._v1.keras.layers import GlobalAveragePooling2D, Dense
+from tensorflow.python.keras.api._v1.keras.layers import Flatten
 from tensorflow.python.keras.api._v1.keras.models import Model
+from tensorflow.python.keras import regularizers
+from tensorflow.python.keras.optimizers import Adagrad
 
 
 def create_model():
-    batch_size = 4  #
-    resize_height = 299  # 指定存储图片高度
-    resize_width = 299  # 指定存储图片宽度
-    depths = 3
-    data_shape = [batch_size, resize_height, resize_width, depths]
-
-    # 定义input_images为图片数据
-    input_images = tf.placeholder(
-        dtype=tf.float32,
-        shape=[None, resize_height, resize_width, depths],
-        name='input')
-    base_model = ResNet50(weights='imagenet', include_top=False)
-    return base_model, data_shape
+    base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+    return base_model
 
 
-def add_new_last_layer(base_model, nb_classes):
+def add_new_last_layer(base_model, train_data, nb_classes):
     x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(1024, activation='relu')(x)
+    # x = Flatten(input_shape=base_model.output_shape[1:])(x)
+    # # x = GlobalAveragePooling2D()(x)
+    # x = Dense(1024, activation='relu')(x)
+    # predictions = Dense(nb_classes, activation='softmax')(x)
+    # model = Model(inputs=base_model.input, outputs=predictions)
+    # x = base_model.output
+    x = GlobalAveragePooling2D(name='average_pool')(x)
+    x = Flatten(name='flatten')(x)
+    # x = Dense(2048, activation='relu', kernel_regularizer=regularizers.l2(0.0001), )(x)
+    # x = BatchNormalization()(x)
+    x = Dense(1024, activation='relu', kernel_regularizer=regularizers.l2(0.0001))(x)
+    # x = BatchNormalization(name='bn_fc_01')(x)
     predictions = Dense(nb_classes, activation='softmax')(x)
     model = Model(inputs=base_model.input, outputs=predictions)
+    # predictions = Dense(nb_classes, activation='softmax')(x)
+    # model = Sequential()
+    # model.add(base_model)
+    # model.add(Flatten(input_shape=train_data.shape[1:]))
+    # model.add(Dense(1024, activation='relu'))
+    # model.add(Dense(nb_classes, activation='softmax'))
+    # top_model = Sequential()
+    # top_model.add(Flatten(input_shape=base_model.output_shape[1:]))
+    # top_model.add(Dense(nb_classes, activation='softmax'))
+    # base_model.add(top_model)
     return model
 
 
@@ -39,6 +51,15 @@ def setup_to_transfer_learning(model, base_model):
     for layer in base_model.layers:
         layer.trainable = False
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+
+def setup_to_fine_tune(model, base_model):
+    GAP_LAYER = 48  # max_pooling_2d_2
+    for layer in base_model.layers[:GAP_LAYER+1]:
+        layer.trainable = False
+    for layer in base_model.layers[GAP_LAYER+1:]:
+        layer.trainable = True
+    model.compile(optimizer=Adagrad(lr=0.0001), loss='categorical_crossentropy', metrics=['accuracy'])
 
 
 def create_model_graph():
